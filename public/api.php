@@ -122,6 +122,42 @@ try {
         }
     }
 
+    // FETCH HISTORY FROM DB IF AVAILABLE
+    // This ensures we see "Cumulative Growth" even after restart
+    $dbUrl = $_ENV['DATABASE_URL'] ?? getenv('DATABASE_URL');
+    if ($dbUrl) {
+        try {
+            $opts = parse_url($dbUrl);
+            $dsn = "pgsql:host={$opts['host']};port={$opts['port']};dbname=" . ltrim($opts['path'], '/');
+            $pdo = new \PDO($dsn, $opts['user'], $opts['pass']);
+
+            // Fetch last 100 trades
+            $stmt = $pdo->query("SELECT * FROM trades ORDER BY id DESC LIMIT 100");
+            $dbTrades = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Map to dashboard format
+            $mappedTrades = [];
+            foreach ($dbTrades as $t) {
+                $mappedTrades[] = [
+                    'timestamp' => $t['timestamp'],
+                    'symbol' => $t['symbol'],
+                    'side' => $t['side'],
+                    'quantity' => $t['quantity'],
+                    'price' => $t['price'],
+                    'pnl' => $t['pnl'],
+                    'total' => $t['price'] * $t['quantity']
+                ];
+            }
+
+            // Use DB trades instead of JSON trades for the History Table
+            // (JSON trades are only for the current session)
+            $portfolio['trades'] = $mappedTrades;
+
+        } catch (Exception $e) {
+            // Ignore DB error, fall back to JSON
+        }
+    }
+
     echo json_encode([
         'symbol' => $symbol,
         'timeframe' => $timeframe,

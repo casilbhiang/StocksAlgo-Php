@@ -6,11 +6,47 @@ class PaperTradingExecutor implements OrderExecutor
 {
     private string $stateFile;
     private array $state;
+    private $pdo;
 
     public function __construct(float $initialBalance = 10000.0, string $stateFile = 'data/paper_trading_state.json')
     {
         $this->stateFile = __DIR__ . '/../../' . $stateFile;
+        // Connect to DB if available
+        $this->connectDb();
         $this->loadState($initialBalance);
+    }
+
+    private function connectDb()
+    {
+        $dbUrl = $_ENV['DATABASE_URL'] ?? getenv('DATABASE_URL');
+        if ($dbUrl) {
+            try {
+                $opts = parse_url($dbUrl);
+                // Render DATABASE_URL format: postgres://user:pass@host:port/dbname
+                $dsn = "pgsql:host={$opts['host']};port={$opts['port']};dbname=" . ltrim($opts['path'], '/');
+                $user = $opts['user'];
+                $pass = $opts['pass'];
+
+                $this->pdo = new \PDO($dsn, $user, $pass);
+                $this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+
+                // Initialize tables if needed
+                $sql = "CREATE TABLE IF NOT EXISTS trades (
+                    id SERIAL PRIMARY KEY,
+                    symbol VARCHAR(10) NOT NULL,
+                    side VARCHAR(4) NOT NULL,
+                    price DECIMAL(10, 4) NOT NULL,
+                    quantity DECIMAL(10, 4) NOT NULL,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    pnl DECIMAL(10, 4) DEFAULT NULL,
+                    strategy VARCHAR(50) DEFAULT NULL
+                )";
+                $this->pdo->exec($sql);
+
+            } catch (\Exception $e) {
+                echo "DB Connection Failed: " . $e->getMessage() . "\n";
+            }
+        }
     }
 
     private function loadState(float $initialBalance): void
@@ -20,7 +56,19 @@ class PaperTradingExecutor implements OrderExecutor
             $this->state = json_decode($json, true) ?? [];
         }
 
-        if (!isset($this->state['balance'])) {
+        // If no JSON (fresh restart), try to recover Balance from DB
+        if (!isset($this->state['balance']) && $this->pdo) {
+            echo "Restoring state from DB...\n";
+            try {
+                $stmt = $this->pdo->query("SELECT SUM(pnl) as total_pnl FROM trades WHERE pnl IS NOT NULL");
+                $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+                $totalPnl = $row['total_pnl'] ?? 0;
+                $this->state['balance'] = $initialBalance + $totalPnl;
+                echo "Restored Balance: " . $this->state['balance'] . "\n";
+            } catch (\Exception $e) {
+                $this->state['balance'] = $initialBalance;
+            }
+        } elseif (!isset($this->state['balance'])) {
             $this->state['balance'] = $initialBalance;
         }
 
@@ -29,7 +77,7 @@ class PaperTradingExecutor implements OrderExecutor
         }
 
         if (!isset($this->state['positions'])) {
-            $this->state['positions'] = []; // Track currently held shares per symbol
+            $this->state['positions'] = [];
         }
     }
 
@@ -43,19 +91,17 @@ class PaperTradingExecutor implements OrderExecutor
         $totalCost = $quantity * $price;
         $pnl = null;
 
-        // Normalize position state (handle old int format)
+        // Normalize position state
         if (isset($this->state['positions'][$symbol]) && is_numeric($this->state['positions'][$symbol])) {
             $this->state['positions'][$symbol] = [
                 'quantity' => (int) $this->state['positions'][$symbol],
-                'avg_price' => $price // Assume current price if unknown? Or 0. Let's start fresh or assume current.
+                'avg_price' => $price
             ];
         }
 
         if ($side === 'BUY') {
             if ($this->state['balance'] < $totalCost) {
-                if ($this->state['balance'] < $totalCost) {
-                    return ['status' => 'failed', 'reason' => 'Insufficient funds'];
-                }
+                return ['status' => 'failed', 'reason' => 'Insufficient funds'];
             }
             $this->state['balance'] -= $totalCost;
 
@@ -73,7 +119,6 @@ class PaperTradingExecutor implements OrderExecutor
 
         } elseif ($side === 'SELL') {
             $currentPos = $this->state['positions'][$symbol] ?? ['quantity' => 0, 'avg_price' => 0];
-            // Handle numeric legacy state just in case
             if (is_numeric($currentPos))
                 $currentPos = ['quantity' => $currentPos, 'avg_price' => 0];
 
@@ -89,7 +134,6 @@ class PaperTradingExecutor implements OrderExecutor
 
             $this->state['positions'][$symbol]['quantity'] -= $quantity;
 
-            // If closed completely, remove or reset?
             if ($this->state['positions'][$symbol]['quantity'] <= 0) {
                 unset($this->state['positions'][$symbol]);
             }
@@ -103,11 +147,29 @@ class PaperTradingExecutor implements OrderExecutor
             'quantity' => $quantity,
             'price' => $price,
             'total' => $totalCost,
-            'pnl' => $pnl, // Add PnL
+            'pnl' => $pnl,
             'balance_after' => $this->state['balance']
         ];
 
         $this->state['trades'][] = $trade;
+
+        // Save to DB
+        if ($this->pdo) {
+            try {
+                $stmt = $this->pdo->prepare("INSERT INTO trades (symbol, side, price, quantity, pnl, timestamp) VALUES (:sym, :side, :price, :qty, :pnl, :ts)");
+                $stmt->execute([
+                    ':sym' => $symbol,
+                    ':side' => $side,
+                    ':price' => $price,
+                    ':qty' => $quantity,
+                    ':pnl' => $pnl,
+                    ':ts' => $trade['timestamp']
+                ]);
+            } catch (\Exception $e) {
+                echo "DB Save Failed: " . $e->getMessage() . "\n";
+            }
+        }
+
         $this->saveState();
 
         echo "[PaperTrade] Executed $side $quantity shares of $symbol @ $$price. PnL: " . ($pnl ? number_format($pnl, 2) : '-') . "\n";

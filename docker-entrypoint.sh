@@ -22,6 +22,12 @@ else
     echo "⚠️ No training data found. Skipping training."
 fi
 
-# 3. Start Bot
-echo "🤖 Starting Trading Bot..."
-php bot.php $SYMBOL $TIMEFRAME
+# 3. Start Bot in Background
+echo "🤖 Starting Trading Bot (Background)..."
+php bot.php $SYMBOL $TIMEFRAME > bot_output.log 2>&1 &
+
+# 4. Start Web Server (Foreground)
+# Render requires a web server to bind to a port to keep the service "Healthy" on Free Tier.
+PORT=${PORT:-8000}
+echo "🌍 Starting Dashboard on port $PORT..."
+php -S 0.0.0.0:$PORT -t public/
