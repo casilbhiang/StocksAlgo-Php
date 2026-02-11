@@ -1,0 +1,18 @@
+{
+    "balance": 7211.700000000001,
+    "trades": [
+        {
+            "id": "698cd035cc3f8",
+            "timestamp": "2026-02-11 18:53:41",
+            "symbol": "AAPL",
+            "side": "BUY",
+            "quantity": 10,
+            "price": 278.83,
+            "total": 2788.2999999999997,
+            "balance_after": 7211.700000000001
+        }
+    ],
+    "positions": {
+        "AAPL": 10
+    }
+}
