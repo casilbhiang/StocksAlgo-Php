@@ -1,5 +1,4 @@
 
-Dockerfile
 # Use an official PHP runtime as a parent image
 FROM php:8.2-cli
 
@@ -32,6 +31,9 @@ RUN pip3 install --break-system-packages -r ml/requirements.txt
 # Make entrypoint executable
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Expose the port the app runs on
+EXPOSE 8000
 
 # Entrypoint runs the bot
 ENTRYPOINT ["docker-entrypoint.sh"]
