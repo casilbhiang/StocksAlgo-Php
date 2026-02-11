@@ -1,18 +1,50 @@
 {
-    "balance": 7211.700000000001,
+    "balance": 9998.900000000001,
     "trades": [
         {
-            "id": "698cd035cc3f8",
-            "timestamp": "2026-02-11 18:53:41",
-            "symbol": "AAPL",
+            "id": "698cd491972bb",
+            "timestamp": "2026-02-11 19:12:17",
+            "symbol": "PLTR",
+            "side": "BUY",
+            "quantity": 5,
+            "price": 135.5,
+            "total": 677.5,
+            "balance_after": 9322.5
+        },
+        {
+            "id": "698cd71c10232",
+            "timestamp": "2026-02-11 19:23:08",
+            "symbol": "PLTR",
+            "side": "SELL",
+            "quantity": 5,
+            "price": 135.54,
+            "total": 677.6999999999999,
+            "balance_after": 10000.2
+        },
+        {
+            "id": "698cd848068e9",
+            "timestamp": "2026-02-11 19:28:08",
+            "symbol": "QQQ",
             "side": "BUY",
             "quantity": 10,
-            "price": 278.83,
-            "total": 2788.2999999999997,
-            "balance_after": 7211.700000000001
+            "price": 614.91,
+            "total": 6149.099999999999,
+            "pnl": null,
+            "balance_after": 3851.1000000000013
+        },
+        {
+            "id": "698cdaa09f0a4",
+            "timestamp": "2026-02-11 19:38:08",
+            "symbol": "QQQ",
+            "side": "SELL",
+            "quantity": 10,
+            "price": 614.78,
+            "total": 6147.799999999999,
+            "pnl": -1.2999999999999545,
+            "balance_after": 9998.900000000001
         }
     ],
     "positions": {
-        "AAPL": 10
+        "PLTR": 0
     }
 }

@@ -27,7 +27,7 @@ class PaperTradingExecutor implements OrderExecutor
         if (!isset($this->state['trades'])) {
             $this->state['trades'] = [];
         }
-        
+
         if (!isset($this->state['positions'])) {
             $this->state['positions'] = []; // Track currently held shares per symbol
         }
@@ -41,34 +41,58 @@ class PaperTradingExecutor implements OrderExecutor
     public function executeOrder(string $symbol, string $side, float $quantity, float $price): array
     {
         $totalCost = $quantity * $price;
+        $pnl = null;
+
+        // Normalize position state (handle old int format)
+        if (isset($this->state['positions'][$symbol]) && is_numeric($this->state['positions'][$symbol])) {
+            $this->state['positions'][$symbol] = [
+                'quantity' => (int) $this->state['positions'][$symbol],
+                'avg_price' => $price // Assume current price if unknown? Or 0. Let's start fresh or assume current.
+            ];
+        }
 
         if ($side === 'BUY') {
             if ($this->state['balance'] < $totalCost) {
-                // In a real bot triggers an error, for now we just log warning and proceed (or return empty)
-                // Let's enforce the limit
-                // throw new \Exception("Insufficient funds.");
-                // For robustness, let's just allow it but maybe go negative or return error?
-                // Let's being strict.
                 if ($this->state['balance'] < $totalCost) {
                     return ['status' => 'failed', 'reason' => 'Insufficient funds'];
                 }
             }
             $this->state['balance'] -= $totalCost;
-            
+
             if (!isset($this->state['positions'][$symbol])) {
-                $this->state['positions'][$symbol] = 0;
+                $this->state['positions'][$symbol] = ['quantity' => 0, 'avg_price' => 0];
             }
-            $this->state['positions'][$symbol] += $quantity;
-            
+
+            $pos = &$this->state['positions'][$symbol];
+
+            // Weighted Average Price
+            if (($pos['quantity'] + $quantity) > 0) {
+                $pos['avg_price'] = (($pos['quantity'] * $pos['avg_price']) + ($quantity * $price)) / ($pos['quantity'] + $quantity);
+            }
+            $pos['quantity'] += $quantity;
+
         } elseif ($side === 'SELL') {
-            // Check if we have shares to sell?
-            $currentQty = $this->state['positions'][$symbol] ?? 0;
-             if ($currentQty < $quantity) {
-                 return ['status' => 'failed', 'reason' => 'Insufficient shares to sell'];
-             }
-            
+            $currentPos = $this->state['positions'][$symbol] ?? ['quantity' => 0, 'avg_price' => 0];
+            // Handle numeric legacy state just in case
+            if (is_numeric($currentPos))
+                $currentPos = ['quantity' => $currentPos, 'avg_price' => 0];
+
+            if ($currentPos['quantity'] < $quantity) {
+                return ['status' => 'failed', 'reason' => 'Insufficient shares to sell'];
+            }
+
             $this->state['balance'] += $totalCost;
-            $this->state['positions'][$symbol] -= $quantity;
+
+            // Calculate PnL
+            $avgEntry = $currentPos['avg_price'];
+            $pnl = ($price - $avgEntry) * $quantity;
+
+            $this->state['positions'][$symbol]['quantity'] -= $quantity;
+
+            // If closed completely, remove or reset?
+            if ($this->state['positions'][$symbol]['quantity'] <= 0) {
+                unset($this->state['positions'][$symbol]);
+            }
         }
 
         $trade = [
@@ -79,13 +103,14 @@ class PaperTradingExecutor implements OrderExecutor
             'quantity' => $quantity,
             'price' => $price,
             'total' => $totalCost,
+            'pnl' => $pnl, // Add PnL
             'balance_after' => $this->state['balance']
         ];
 
         $this->state['trades'][] = $trade;
         $this->saveState();
 
-        echo "[PaperTrade] Executed $side $quantity shares of $symbol @ $$price. New Balance: $" . number_format($this->state['balance'], 2) . "\n";
+        echo "[PaperTrade] Executed $side $quantity shares of $symbol @ $$price. PnL: " . ($pnl ? number_format($pnl, 2) : '-') . "\n";
 
         return ['status' => 'filled', 'trade' => $trade];
     }
@@ -94,9 +119,12 @@ class PaperTradingExecutor implements OrderExecutor
     {
         return $this->state['balance'];
     }
-    
-    public function getPosition(string $symbol): int 
+
+    public function getPosition(string $symbol): int
     {
-        return $this->state['positions'][$symbol] ?? 0;
+        $pos = $this->state['positions'][$symbol] ?? 0;
+        if (is_array($pos))
+            return $pos['quantity'];
+        return (int) $pos;
     }
 }

@@ -4,6 +4,7 @@ require __DIR__ . '/vendor/autoload.php';
 
 use StocksAlgo\Data\TwelveDataDataProvider;
 use StocksAlgo\Strategy\PinBarStrategy;
+use StocksAlgo\Strategy\VolumeMAStrategy;
 use StocksAlgo\Execution\PaperTradingExecutor;
 use Dotenv\Dotenv;
 
@@ -20,7 +21,9 @@ echo "Starting Paper Trading Bot for $symbol ($timeframe)...\n";
 echo "Press Ctrl+C to stop.\n";
 
 $provider = new TwelveDataDataProvider($apiKey);
-$strategy = new PinBarStrategy();
+// $strategy = new VolumeMAStrategy(20, 2.0);
+echo "Strategy: Machine Learning (LSTM)\n";
+$strategy = new StocksAlgo\Strategy\MLStrategy();
 $executor = new PaperTradingExecutor(); // Defaults to $10,000
 
 $lastProcessedTime = 0;
@@ -31,8 +34,9 @@ while (true) {
         echo "[" . $now->format('H:i:s') . "] Checking market...\n";
 
         // Fetch just enough data for the strategy
-        // PinBar only needs the current candle, but let's fetch a few to be safe/consistent
-        $start = $now->modify('-2 hours');
+        // Quant Upgrade: Need more history for indicators (RSI/MACD require warm-up)
+        // Fetch 24 hours of 5min bars (~288 bars)
+        $start = $now->modify('-24 hours');
         $bars = $provider->getBars($symbol, $timeframe, $start, $now);
 
         if (empty($bars)) {
@@ -41,41 +45,31 @@ while (true) {
             continue;
         }
 
-        // Get the most recent completed bar? 
-        // Twelve Data returns closed bars usually, or realtime. 
-        // If we are trading '5min', we usually wait for the bar to close.
-        // Let's assume the last bar in the array is the most recent one.
+        // Get the most recent completed bar
         $lastBar = end($bars);
         $barTime = $lastBar->timestamp->getTimestamp();
 
         if ($barTime > $lastProcessedTime) {
             // New bar detected
             echo "Processing bar: " . $lastBar->timestamp->format('Y-m-d H:i') . " (Close: {$lastBar->close})\n";
-            
+
             // Check Strategy
-            // We pass 'null' for position if we just want entry signals
-            // Or we check our current position from executor
             $currentPosition = $executor->getPosition($symbol);
-            
-            // Allow strategy to know if we are long/short? 
-            // The current PinBarStrategy interface `onBar` takes `Position $position`.
-            // We might need to construct a Position object or update the interface.
-            // For now, let's just pass null to get raw signals, 
-            // and handle "don't buy if already long" here in the bot logic.
-            
-            $signal = $strategy->onBar($lastBar, null);
+
+            // FIX: Pass $bars (history) to the strategy!
+            $signal = $strategy->onBar($lastBar, null, $bars);
 
             if ($signal) {
                 echo "SIGNAL DETECTED: $signal\n";
-                
+
                 // Simple Position Sizing: Trade 10 shares fixed
-                $quantity = 10; 
-                
+                $quantity = 10;
+
                 // Logic: 
                 // If BUY signal and we have 0 shares -> Buy
                 // If SELL signal and we have > 0 shares -> Sell (Exit)
                 // (Or if Strategy is Shorting, that's different. PinBarStrategy returns BUY/SELL).
-                
+
                 if ($signal === 'BUY') {
                     if ($currentPosition == 0) {
                         $executor->executeOrder($symbol, 'BUY', $quantity, $lastBar->close);
