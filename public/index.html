@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stocks Algo Dashboard</title>
+
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+            margin: 20px;
+            background: #222;
+            color: #eee;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #333;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .controls input,
+        .controls select,
+        .controls button {
+            padding: 8px 12px;
+            font-size: 16px;
+            border: none;
+            border-radius: 4px;
+            background: #444;
+            color: white;
+        }
+
+        .controls button {
+            background: #2962ff;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .controls button:hover {
+            background: #1e4bd6;
+        }
+
+        .chart-container {
+            background: #333;
+            padding: 0;
+            border-radius: 8px;
+            height: 600px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .loading {
+            display: none;
+            color: #888;
+            margin-left: auto;
+        }
+
+        .signal-list {
+            margin-top: 20px;
+            padding: 15px;
+            background: #333;
+            border-radius: 8px;
+        }
+
+        .signal-item {
+            padding: 10px;
+            border-bottom: 1px solid #444;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .signal-long {
+            color: #089981;
+            font-weight: bold;
+        }
+
+        .signal-short {
+            color: #f23645;
+            font-weight: bold;
+        }
+    </style>
+
+    <!-- Use Local Script -->
+    <script src="js/lightweight-charts.js"></script>
+</head>
+
+<body>
+
+    <div class="controls">
+        <input type="text" id="symbol" value="IBM" placeholder="Symbol (e.g. IBM)">
+        <select id="timeframe">
+            <option value="5min">5 Minutes</option>
+            <option value="15min">15 Minutes</option>
+            <option value="1h">1 Hour</option>
+            <option value="1day">1 Day</option>
+        </select>
+        <button onclick="fetchData()">Load Chart</button>
+        <span id="loading" class="loading">Loading data...</span>
+    </div>
+
+    <div class="chart-container" id="chart"></div>
+
+    <div class="signal-list" id="signalList">
+        <h3>Signals</h3>
+    </div>
+
+    <script>
+        var chart;
+        var candleSeries;
+        var seriesMarkers; // Store the series markers plugin instance
+
+        document.addEventListener('DOMContentLoaded', function () {
+            try {
+                if (typeof LightweightCharts === 'undefined') {
+                    console.error('CRITICAL: LightweightCharts library missing. Did js/lightweight-charts.js load correctly?');
+                    alert('CRITICAL ERROR: LightweightCharts library could NOT be loaded. Please check that public/js/lightweight-charts.js exists.');
+                    return;
+                }
+
+                initChart();
+                fetchData();
+            } catch (e) {
+                console.error('EXCEPTION in DOMContentLoaded: ' + e.message + '\n' + e.stack);
+            }
+        });
+
+        function initChart() {
+            try {
+                const container = document.getElementById('chart');
+                if (!container) { throw new Error("Chart container element not found"); }
+
+                const chartOptions = {
+                    layout: {
+                        textColor: '#d1d4dc',
+                        background: { type: 'solid', color: '#333' }
+                    },
+                    grid: {
+                        vertLines: { color: '#444' },
+                        horzLines: { color: '#444' }
+                    },
+                    timeScale: {
+                        timeVisible: true,
+                        secondsVisible: false,
+                    }
+                };
+
+                chart = LightweightCharts.createChart(container, chartOptions);
+
+                // V5 API Compatibility
+                if (typeof chart.addCandlestickSeries === 'function') {
+                    candleSeries = chart.addCandlestickSeries({
+                        upColor: '#089981',
+                        downColor: '#f23645',
+                        borderVisible: false,
+                        wickUpColor: '#089981',
+                        wickDownColor: '#f23645'
+                    });
+                } else {
+                    // v5 addSeries
+                    if (typeof LightweightCharts.CandlestickSeries === 'undefined') {
+                        throw new Error("LightweightCharts.CandlestickSeries is undefined. Cannot create series.");
+                    }
+                    candleSeries = chart.addSeries(LightweightCharts.CandlestickSeries, {
+                        upColor: '#089981',
+                        downColor: '#f23645',
+                        borderVisible: false,
+                        wickUpColor: '#089981',
+                        wickDownColor: '#f23645'
+                    });
+                }
+
+                new ResizeObserver(entries => {
+                    if (entries.length === 0 || entries[0].target !== container) { return; }
+                    const newRect = entries[0].contentRect;
+                    chart.applyOptions({ height: newRect.height, width: newRect.width });
+                }).observe(container);
+
+            } catch (e) {
+                console.error('initChart FAILED: ' + e.message);
+                throw e; // Re-throw to be caught by DOMContentLoaded
+            }
+        }
+
+        async function fetchData() {
+            if (!chart || !candleSeries) {
+                console.error('ERROR: Chart object is missing. Aborting fetch.');
+                alert("Chart was not initialized. Cannot fetch data.");
+                return;
+            }
+
+            const symbol = document.getElementById('symbol').value;
+            const timeframe = document.getElementById('timeframe').value;
+            const loading = document.getElementById('loading');
+
+            loading.style.display = 'inline';
+
+            try {
+                const url = `api.php?symbol=${symbol}&timeframe=${timeframe}`;
+                console.log(`Fetching: ${url}`);
+
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
+
+                const text = await response.text();
+
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    console.error('JSON Parse Error. Response: ' + text.slice(0, 100));
+                    throw new Error(`Invalid JSON response: ${text.slice(0, 100)}...`);
+                }
+
+                if (data.error) throw new Error(data.error);
+
+                if (!data.bars || data.bars.length === 0) {
+                    console.warn('No bars returned in data.');
+                    alert('API returned no data bars.');
+                    return;
+                }
+
+                const candles = data.bars.map(b => ({
+                    time: b.x / 1000,
+                    open: b.o,
+                    high: b.h,
+                    low: b.l,
+                    close: b.c
+                }));
+
+                candles.sort((a, b) => a.time - b.time);
+                candleSeries.setData(candles);
+
+                console.log(`Loaded ${candles.length} candles.`);
+
+                // Markers (Checking compatibility for v5)
+                const markers = [];
+                if (data.signals && Array.isArray(data.signals)) {
+                    data.signals.forEach(s => {
+                        markers.push({
+                            time: s.x / 1000,
+                            position: s.type === 'BUY' ? 'belowBar' : 'aboveBar',
+                            color: s.type === 'BUY' ? '#089981' : '#f23645',
+                            shape: s.type === 'BUY' ? 'arrowUp' : 'arrowDown',
+                            text: s.type
+                        });
+                    });
+                    markers.sort((a, b) => a.time - b.time);
+
+                    if (typeof candleSeries.setMarkers === 'function') {
+                        candleSeries.setMarkers(markers);
+                    } else if (typeof LightweightCharts.createSeriesMarkers === 'function') {
+                        if (seriesMarkers) {
+                            seriesMarkers.setMarkers(markers);
+                        } else {
+                            seriesMarkers = LightweightCharts.createSeriesMarkers(candleSeries, markers);
+                        }
+                    } else {
+                        console.error('ERROR: No method found to set markers.');
+                    }
+
+                    console.log(`Loaded ${data.signals.length} signals.`);
+                }
+
+                chart.timeScale().fitContent();
+                renderSignalsList(data.signals || []);
+
+            } catch (e) {
+                console.error('fetchData ERROR: ' + e.message);
+                alert('Fetch Error: ' + e.message);
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        function renderSignalsList(signals) {
+            const container = document.getElementById('signalList');
+            container.innerHTML = '<h3>Recent Signals</h3>';
+
+            if (!signals || signals.length === 0) {
+                container.innerHTML += '<p>No signals found.</p>';
+                return;
+            }
+
+            [...signals].reverse().forEach(s => {
+                const date = new Date(s.x).toLocaleString();
+                const className = s.type === 'BUY' ? 'signal-long' : 'signal-short';
+                const html = `
+                    <div class="signal-item">
+                        <div>
+                            <span class="${className}">${s.type}</span> 
+                            <span style="color:#aaa; font-size:0.9em">@ ${s.price}</span>
+                        </div>
+                        <div style="color:#888; font-size:0.9em">
+                            ${date} <br>
+                            <small>${s.description}</small>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += html;
+            });
+        }
+    </script>
+</body>
+
+</html>

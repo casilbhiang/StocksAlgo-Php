@@ -1,0 +1,7 @@
+.env
+vendor/
+node_modules/
+.idea/
+.vscode/
+*.log
+api_error.log
