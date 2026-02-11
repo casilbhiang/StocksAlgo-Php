@@ -8,14 +8,20 @@ use StocksAlgo\Strategy\VolumeMAStrategy;
 use StocksAlgo\Execution\PaperTradingExecutor;
 use Dotenv\Dotenv;
 
-// Load .env
+// Load .env (Safe load for Docker/Render compatibility)
 $dotenv = Dotenv::createImmutable(__DIR__);
-$dotenv->load();
+$dotenv->safeLoad();
 
 // Configuration
 $symbol = $argv[1] ?? 'AAPL';
 $timeframe = $argv[2] ?? '5min';
-$apiKey = $_ENV['TWELVE_DATA_API_KEY'] ?? die("API Key missing.\n");
+
+// Support both .env and system env vars (Docker)
+$apiKey = $_ENV['TWELVE_DATA_API_KEY'] ?? getenv('TWELVE_DATA_API_KEY');
+
+if (!$apiKey) {
+    die("API Key missing. Please set TWELVE_DATA_API_KEY in .env or Environment Variables.\n");
+}
 
 echo "Starting Paper Trading Bot for $symbol ($timeframe)...\n";
 echo "Press Ctrl+C to stop.\n";
