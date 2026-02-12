@@ -97,9 +97,24 @@
             "total": 10047.922059,
             "pnl": 50.421268999998915,
             "balance_after": 10049.321269000002
+        },
+        {
+            "id": "698da31fca006",
+            "timestamp": "2026-02-12 09:53:35",
+            "symbol": "BTC\/USD",
+            "side": "SELL",
+            "quantity": 0.1416,
+            "price": 67381.08,
+            "total": 9541.160928000001,
+            "pnl": null,
+            "balance_after": 10049.321269000002
         }
     ],
     "positions": {
-        "PLTR": 0
+        "PLTR": 0,
+        "BTC\/USD": {
+            "quantity": -0.1416,
+            "avg_price": 67381.08
+        }
     }
 }
