@@ -81,13 +81,26 @@ while (true) {
 
                 if ($signal === 'BUY') {
                     if ($currentPosition == 0) {
-                        $executor->executeOrder($symbol, 'BUY', $quantity, $lastBar->close);
+                        // Position Sizing: Use 95% of balance
+                        $balance = $executor->getBalance();
+                        $quantity = floor(($balance * 0.95) / $lastBar->close * 10000) / 10000; // Keep 4 decimals
+
+                        // Enforce minimum size (at least 0.0001 BTC or 1 share)
+                        if ($quantity <= 0)
+                            $quantity = 0.0001;
+
+                        echo "[Bot] Buying $quantity of $symbol...\n";
+                        $res = $executor->executeOrder($symbol, 'BUY', $quantity, $lastBar->close);
+                        print_r($res);
+
                     } else {
                         echo "Signal BUY ignored: Already holding $currentPosition shares.\n";
                     }
                 } elseif ($signal === 'SELL') {
                     if ($currentPosition > 0) {
-                        $executor->executeOrder($symbol, 'SELL', $currentPosition, $lastBar->close); // Sell all
+                        echo "[Bot] Selling $currentPosition of $symbol...\n";
+                        $res = $executor->executeOrder($symbol, 'SELL', $currentPosition, $lastBar->close); // Sell all
+                        print_r($res);
                     } else {
                         echo "Signal SELL ignored: No position to sell.\n";
                     }

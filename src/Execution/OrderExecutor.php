@@ -21,4 +21,12 @@ interface OrderExecutor
      * @return float
      */
     public function getBalance(): float;
+
+    /**
+     * Get the current position for a symbol.
+     * 
+     * @param string $symbol
+     * @return float
+     */
+    public function getPosition(string $symbol): float;
 }

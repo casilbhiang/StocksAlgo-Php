@@ -475,13 +475,17 @@
                 if (data.portfolio) {
                     const bal = parseFloat(data.portfolio.balance).toFixed(2);
                     const eq = parseFloat(data.portfolio.equity).toFixed(2);
-                    const pos = parseInt(data.portfolio.position);
+                    const pos = parseFloat(data.portfolio.position);
 
                     document.getElementById('stat-balance').innerText = '$' + bal;
                     document.getElementById('stat-equity').innerText = '$' + eq;
 
                     const posEl = document.getElementById('stat-position');
-                    posEl.innerText = pos + ' shares';
+                    // Show up to 4 decimals for crypto, but no decimals for round lots if integer
+                    const displayPos = Number.isInteger(pos) ? pos : pos.toFixed(4);
+
+                    posEl.innerText = displayPos + (displayPos == 1 ? ' unit' : ' units');
+
                     if (pos > 0) posEl.className = 'stat-value text-green';
                     else if (pos < 0) posEl.className = 'stat-value text-red';
                     else posEl.className = 'stat-value';

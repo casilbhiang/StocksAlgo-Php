@@ -182,11 +182,11 @@ class PaperTradingExecutor implements OrderExecutor
         return $this->state['balance'];
     }
 
-    public function getPosition(string $symbol): int
+    public function getPosition(string $symbol): float
     {
-        $pos = $this->state['positions'][$symbol] ?? 0;
+        $pos = $this->state['positions'][$symbol] ?? 0.0;
         if (is_array($pos))
-            return $pos['quantity'];
-        return (int) $pos;
+            return (float) $pos['quantity'];
+        return (float) $pos;
     }
 }

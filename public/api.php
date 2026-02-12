@@ -101,6 +101,9 @@ try {
                 $currentPrice = 0.0;
             }
 
+            // DEBUG: Log keys to see why BTC/USD isn't finding the position
+            // file_put_contents(__DIR__ . '/../api_error.log', "Looking for: '$symbol' in keys: " . implode(", ", array_keys($state['positions'])) . "\n", FILE_APPEND);
+
             $rawPos = $state['positions'][$symbol] ?? 0;
             $quantity = 0;
             if (is_array($rawPos)) {
