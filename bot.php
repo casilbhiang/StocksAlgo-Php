@@ -58,6 +58,26 @@ while (true) {
         $lastBar = end($bars);
         $barTime = $lastBar->timestamp->getTimestamp();
 
+        // CACHE: Save data for the Dashboard (api.php) to use
+        // This prevents the Dashboard from burning API credits!
+        $cacheFile = __DIR__ . '/data/latest_market_data.json';
+        $cacheData = [
+            'symbol' => $symbol,
+            'timeframe' => $timeframe,
+            'timestamp' => time(),
+            'bars' => array_map(function ($b) {
+                return [
+                    'timestamp' => $b->timestamp->format('c'),
+                    'open' => $b->open,
+                    'high' => $b->high,
+                    'low' => $b->low,
+                    'close' => $b->close,
+                    'volume' => $b->volume
+                ];
+            }, $bars)
+        ];
+        file_put_contents($cacheFile, json_encode($cacheData));
+
         if ($barTime > $lastProcessedTime) {
             // New bar detected
             echo "Processing bar: " . $lastBar->timestamp->format('Y-m-d H:i') . " (Close: {$lastBar->close})\n";

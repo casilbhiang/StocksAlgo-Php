@@ -43,7 +43,40 @@ try {
     $end = new DateTimeImmutable('now');
     $start = $end->modify('-2 days');
 
-    $bars = $provider->getBars($symbol, $timeframe, $start, $end);
+    // OPTIMIZATION: Try to read from Bot's Cache first
+    $cacheFile = __DIR__ . '/../data/latest_market_data.json';
+    $usedCache = false;
+
+    if (file_exists($cacheFile)) {
+        $cache = json_decode(file_get_contents($cacheFile), true);
+        // Check if cache is for the same symbol/timeframe and is fresh (< 2 mins)
+        if (
+            $cache['symbol'] === $symbol &&
+            $cache['timeframe'] === $timeframe &&
+            (time() - $cache['timestamp'] < 120)
+        ) {
+
+            $bars = [];
+            foreach ($cache['bars'] as $b) {
+                // Rehydrate bar objects
+                $bars[] = new StocksAlgo\Data\Bar(
+                    (float) $b['open'],
+                    (float) $b['high'],
+                    (float) $b['low'],
+                    (float) $b['close'],
+                    (float) $b['volume'],
+                    new DateTimeImmutable($b['timestamp'])
+                );
+            }
+            $usedCache = true;
+            // echo "DEBUG: Used Cache\n"; 
+        }
+    }
+
+    if (!$usedCache) {
+        // Fallback: Call API (Costs credits)
+        $bars = $provider->getBars($symbol, $timeframe, $start, $end);
+    }
 
     $chartData = [];
     $signals = [];
