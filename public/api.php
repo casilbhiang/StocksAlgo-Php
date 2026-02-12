@@ -167,12 +167,20 @@ try {
         }
     }
 
+    // AI Brain Dump
+    $aiMemoryFile = __DIR__ . '/../data/ai_memory.json';
+    $aiAnalysis = null;
+    if (file_exists($aiMemoryFile)) {
+        $aiAnalysis = json_decode(file_get_contents($aiMemoryFile), true);
+    }
+
     echo json_encode([
         'symbol' => $symbol,
         'timeframe' => $timeframe,
         'bars' => $chartData,
         'signals' => $signals,
-        'portfolio' => $portfolio
+        'portfolio' => $portfolio,
+        'ai_analysis' => $aiAnalysis
     ]);
 
 } catch (Throwable $e) {

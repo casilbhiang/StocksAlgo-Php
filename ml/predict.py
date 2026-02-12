@@ -54,8 +54,15 @@ if len(sys.argv) < 2:
     sys.exit(1)
 
 try:
-    input_str = sys.argv[1]
-    raw_data = json.loads(input_str)
+    arg = sys.argv[1]
+    
+    # Check if argument is a file path
+    if os.path.exists(arg) and os.path.isfile(arg):
+        with open(arg, 'r') as f:
+            raw_data = json.load(f)
+    else:
+        # Fallback to direct string
+        raw_data = json.loads(arg)
     
     # Create DataFrame
     df = pd.DataFrame(raw_data)
@@ -113,14 +120,44 @@ try:
     
     change = (predicted_price - current_price) / current_price
     
+    # Confidence Calculation
+    # Cap confidence at 100% if change is 5x the threshold
+    confidence = min(abs(change) / (threshold_pct * 5), 1.0) * 100
+    
+    signal = "HOLD"
     if change > threshold_pct:
-        print(f"BUY ({predicted_price:.2f})")
+        signal = "BUY"
     elif change < -threshold_pct:
-        print(f"SELL ({predicted_price:.2f})")
-    else:
-        print(f"HOLD ({predicted_price:.2f})")
+        signal = "SELL"
+        
+    # Get Indicator Values (Last row)
+    rsi_val = df['RSI_14'].iloc[-1]
+    macd_val = df['MACDh_12_26_9'].iloc[-1]
+
+    output = {
+        "signal": signal,
+        "confidence": round(float(confidence), 2),
+        "predicted_price": round(float(predicted_price), 2),
+        "current_price": round(float(current_price), 2),
+        "rsi": round(float(rsi_val), 2) if not pd.isna(rsi_val) else 0,
+        "macd": round(float(macd_val), 4) if not pd.isna(macd_val) else 0
+    }
+    
+    print(json.dumps(output))
 
 except Exception as e:
+    error_msg = f"Error: {str(e)}"
     # print(e) # Debug
-    print("HOLD (Error)")
+    
+    # Fallback JSON so PHP doesn't crash
+    fallback = {
+        "signal": "HOLD",
+        "confidence": 0,
+        "predicted_price": 0,
+        "current_price": 0,
+        "rsi": 0,
+        "macd": 0,
+        "error": error_msg
+    }
+    print(json.dumps(fallback))
     sys.exit(1)

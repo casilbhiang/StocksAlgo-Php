@@ -41,12 +41,18 @@ class MLStrategy implements Strategy
 
         $jsonInput = json_encode($data);
 
+        // Use a temp file to pass data (avoid shell escaping issues on Windows)
+        $tempFile = sys_get_temp_dir() . '/ml_input_' . uniqid() . '.json';
+        file_put_contents($tempFile, $jsonInput);
+
         // 3. Call Python
-        // Escape the JSON string for shell argument
-        $cmd = 'python "' . $this->pythonScriptPath . '" ' . escapeshellarg($jsonInput);
+        $cmd = 'python "' . $this->pythonScriptPath . '" "' . $tempFile . '"';
 
         // Execute
         $output = shell_exec($cmd);
+
+        // Clean up
+        @unlink($tempFile);
 
         if ($output === null) {
             // Error executing
@@ -58,13 +64,24 @@ class MLStrategy implements Strategy
 
         // Python prints: "BUY (101.20)" or "HOLD ..."
         // Parse the output
-        if (str_starts_with($output, 'BUY')) {
-            return 'BUY';
-        } elseif (str_starts_with($output, 'SELL')) {
-            return 'SELL';
+        $result = json_decode($output, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            echo "[MLStrategy] Invalid JSON from Python: $output\n";
+            return null;
         }
 
-        echo "[MLStrategy] Python says: $output\n";
+        // Save "Brain Dump" for Dashboard
+        $memoryFile = __DIR__ . '/../../data/ai_memory.json';
+        file_put_contents($memoryFile, json_encode($result));
+
+        // Return Signal
+        $signal = $result['signal'];
+        echo "[MLStrategy] Brain: $signal ({$result['confidence']}%) | RSI: {$result['rsi']}\n";
+
+        if ($signal === 'BUY' || $signal === 'SELL') {
+            return $signal;
+        }
         return null;
     }
 }
