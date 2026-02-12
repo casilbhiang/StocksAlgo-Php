@@ -22,7 +22,7 @@ echo.
 
 :: Pass arguments to run_bot if provided, else default to QQQ 1min
 if "%~1"=="" (
-    call run_bot.bat QQQ 1min
+    call run_bot.bat "BTC/USD" 1min
 ) else (
     call run_bot.bat %1 %2
 )

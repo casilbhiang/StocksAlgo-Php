@@ -40,7 +40,8 @@ try {
 
     echo "Received " . count($bars) . " bars.\n";
 
-    $csvFile = __DIR__ . '/ml/data/' . $symbol . '_' . $timeframe . '.csv';
+    $safeSymbol = str_replace('/', '_', $symbol);
+    $csvFile = __DIR__ . '/ml/data/' . $safeSymbol . '_' . $timeframe . '.csv';
     $fp = fopen($csvFile, 'w');
 
     // Header

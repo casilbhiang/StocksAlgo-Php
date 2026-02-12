@@ -73,7 +73,7 @@
 
         .dashboard-stats {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 15px;
             margin-bottom: 20px;
         }
@@ -228,6 +228,10 @@
                 <div class="stat-label">Position</div>
                 <div class="stat-value" id="stat-position">---</div>
             </div>
+            <div class="stat-box">
+                <div class="stat-label">ROI %</div>
+                <div class="stat-value" id="stat-roi">---</div>
+            </div>
         </div>
 
         <div style="text-align: right; color: #666; font-size: 0.8em; margin-top: -15px; margin-bottom: 5px;">
@@ -284,8 +288,8 @@
                 initChart();
                 fetchData();
 
-                // Auto-refresh every 5 seconds
-                setInterval(fetchData, 5000);
+                // Auto-refresh every 60 seconds (aligned with bot)
+                setInterval(fetchData, 60000);
             } catch (e) {
                 console.error('EXCEPTION in DOMContentLoaded: ' + e.message);
                 status.innerText = "Startup Error: " + e.message;
@@ -455,6 +459,15 @@
                     else posEl.className = 'stat-value';
 
                     renderTradeHistory(data.portfolio.trades || []);
+
+                    if (data.portfolio.roi_percent !== undefined) {
+                        const roi = parseFloat(data.portfolio.roi_percent).toFixed(2);
+                        const roiEl = document.getElementById('stat-roi');
+                        roiEl.innerText = roi + '%';
+                        if (roi > 0) roiEl.style.color = '#089981';
+                        else if (roi < 0) roiEl.style.color = '#f23645';
+                        else roiEl.style.color = '#fff';
+                    }
                 }
 
                 status.innerText = new Date().toLocaleTimeString();

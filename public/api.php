@@ -122,6 +122,11 @@ try {
 
             // Approximate Equity = Balance + (Current Symbol Value)
             $portfolio['equity'] = $portfolio['balance'] + ($quantity * $currentPrice);
+
+            // Calculate ROI %
+            $initialBalance = 10000.0; // Hardcoded start for now, or fetch from DB if we tracked deposits
+            $totalPnl = $portfolio['equity'] - $initialBalance;
+            $portfolio['roi_percent'] = ($totalPnl / $initialBalance) * 100;
         }
     }
 
@@ -131,33 +136,34 @@ try {
     if ($dbUrl) {
         try {
             $opts = parse_url($dbUrl);
-            $dsn = "pgsql:host={$opts['host']};port={$opts['port']};dbname=" . ltrim($opts['path'], '/');
-            $pdo = new \PDO($dsn, $opts['user'], $opts['pass']);
+            if (isset($opts['host'])) {
+                $dsn = "pgsql:host={$opts['host']};port={$opts['port']};dbname=" . ltrim($opts['path'], '/');
+                $pdo = new \PDO($dsn, $opts['user'], $opts['pass']);
+                $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION); // Throw exceptions on error
 
-            // Fetch last 100 trades
-            $stmt = $pdo->query("SELECT * FROM trades ORDER BY id DESC LIMIT 100");
-            $dbTrades = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                // Fetch last 100 trades
+                $stmt = $pdo->query("SELECT * FROM trades ORDER BY id DESC LIMIT 100");
+                $dbTrades = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            // Map to dashboard format
-            $mappedTrades = [];
-            foreach ($dbTrades as $t) {
-                $mappedTrades[] = [
-                    'timestamp' => $t['timestamp'],
-                    'symbol' => $t['symbol'],
-                    'side' => $t['side'],
-                    'quantity' => $t['quantity'],
-                    'price' => $t['price'],
-                    'pnl' => $t['pnl'],
-                    'total' => $t['price'] * $t['quantity']
-                ];
+                // Map to dashboard format
+                $mappedTrades = [];
+                foreach ($dbTrades as $t) {
+                    $mappedTrades[] = [
+                        'timestamp' => $t['timestamp'],
+                        'symbol' => $t['symbol'],
+                        'side' => $t['side'],
+                        'quantity' => $t['quantity'],
+                        'price' => $t['price'],
+                        'pnl' => $t['pnl'],
+                        'total' => $t['price'] * $t['quantity']
+                    ];
+                }
+
+                $portfolio['trades'] = $mappedTrades;
             }
-
-            // Use DB trades instead of JSON trades for the History Table
-            // (JSON trades are only for the current session)
-            $portfolio['trades'] = $mappedTrades;
-
         } catch (Exception $e) {
-            // Ignore DB error, fall back to JSON
+            // SILENT FAIL: If DB is down or invalid URL, just ignore it and use JSON state.
+            // echo "DB Error: " . $e->getMessage(); 
         }
     }
 

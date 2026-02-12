@@ -64,7 +64,7 @@ class MLStrategy implements Strategy
             return 'SELL';
         }
 
-        // echo "[MLStrategy] Python says: $output\n";
+        echo "[MLStrategy] Python says: $output\n";
         return null;
     }
 }
