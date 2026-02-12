@@ -100,29 +100,53 @@ while (true) {
                 // (Or if Strategy is Shorting, that's different. PinBarStrategy returns BUY/SELL).
 
                 if ($signal === 'BUY') {
-                    if ($currentPosition == 0) {
-                        // Position Sizing: Use 95% of balance
-                        $balance = $executor->getBalance();
-                        $quantity = floor(($balance * 0.95) / $lastBar->close * 10000) / 10000; // Keep 4 decimals
+                    // Position Sizing: Use 95% of balance (or max affordable)
+                    $balance = $executor->getBalance();
 
-                        // Enforce minimum size (at least 0.0001 BTC or 1 share)
-                        if ($quantity <= 0)
-                            $quantity = 0.0001;
+                    if ($currentPosition <= 0) {
+                        // We are either Flat (0) or Short (<0)
 
-                        echo "[Bot] Buying $quantity of $symbol...\n";
-                        $res = $executor->executeOrder($symbol, 'BUY', $quantity, $lastBar->close);
-                        print_r($res);
+                        if ($currentPosition < 0) {
+                            // COVER SHORT
+                            echo "[Bot] Covering Short Position ($currentPosition)...\n";
+                            $qtyToCover = abs($currentPosition);
+                            $res = $executor->executeOrder($symbol, 'BUY', $qtyToCover, $lastBar->close);
+                            print_r($res);
+                        } else {
+                            // OPEN LONG
+                            $quantity = floor(($balance * 0.95) / $lastBar->close * 10000) / 10000;
+                            if ($quantity <= 0)
+                                $quantity = 0.0001;
+
+                            echo "[Bot] Buying $quantity of $symbol...\n";
+                            $res = $executor->executeOrder($symbol, 'BUY', $quantity, $lastBar->close);
+                            print_r($res);
+                        }
 
                     } else {
-                        echo "Signal BUY ignored: Already holding $currentPosition shares.\n";
+                        echo "[Bot] Signal BUY ignored: Already Long ($currentPosition).\n";
                     }
                 } elseif ($signal === 'SELL') {
+                    // SELLING
                     if ($currentPosition > 0) {
-                        echo "[Bot] Selling $currentPosition of $symbol...\n";
-                        $res = $executor->executeOrder($symbol, 'SELL', $currentPosition, $lastBar->close); // Sell all
+                        // CLOSE LONG
+                        echo "[Bot] Selling Long Position ($currentPosition)...\n";
+                        $res = $executor->executeOrder($symbol, 'SELL', $currentPosition, $lastBar->close);
                         print_r($res);
                     } else {
-                        echo "Signal SELL ignored: No position to sell.\n";
+                        // OPEN SHORT
+                        if ($currentPosition == 0) {
+                            $balance = $executor->getBalance();
+                            $quantity = floor(($balance * 0.95) / $lastBar->close * 10000) / 10000;
+                            if ($quantity <= 0)
+                                $quantity = 0.0001;
+
+                            echo "[Bot] Opening SHORT for $quantity of $symbol...\n";
+                            $res = $executor->executeOrder($symbol, 'SELL', $quantity, $lastBar->close);
+                            print_r($res);
+                        } else {
+                            echo "Signal SELL ignored: Already Short ($currentPosition).\n";
+                        }
                     }
                 }
             } else {

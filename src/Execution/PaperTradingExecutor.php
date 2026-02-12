@@ -99,43 +99,86 @@ class PaperTradingExecutor implements OrderExecutor
             ];
         }
 
+        // Initialize Position if missing
+        if (!isset($this->state['positions'][$symbol])) {
+            $this->state['positions'][$symbol] = ['quantity' => 0, 'avg_price' => 0];
+        }
+        $pos = &$this->state['positions'][$symbol];
+
         if ($side === 'BUY') {
-            if ($this->state['balance'] < $totalCost) {
-                return ['status' => 'failed', 'reason' => 'Insufficient funds'];
-            }
-            $this->state['balance'] -= $totalCost;
+            // COVERING A SHORT OR GOING LONG
+            if ($pos['quantity'] < 0) {
+                // We are Short, so this BUY is a "Cover"
+                $coverQty = min($quantity, abs($pos['quantity']));
 
-            if (!isset($this->state['positions'][$symbol])) {
-                $this->state['positions'][$symbol] = ['quantity' => 0, 'avg_price' => 0];
-            }
+                // PnL on the Short portion: (Entry - Current) * Qty
+                // Entry was Higher, Current is Lower = Profit
+                $pnl = ($pos['avg_price'] - $price) * $coverQty;
 
-            $pos = &$this->state['positions'][$symbol];
+                // Deduct cost from balance (Buying back shares)
+                // Note: In paper trading shorts often credit cash upfront. 
+                // Here we simplify: You need cash to cover.
+                if ($this->state['balance'] < ($coverQty * $price)) {
+                    return ['status' => 'failed', 'reason' => 'Insufficient funds to cover short'];
+                }
+                $this->state['balance'] -= ($coverQty * $price);
+                // Add Profit (or subtract Loss) realized
+                $this->state['balance'] += $pnl;
 
-            // Weighted Average Price
-            if (($pos['quantity'] + $quantity) > 0) {
-                $pos['avg_price'] = (($pos['quantity'] * $pos['avg_price']) + ($quantity * $price)) / ($pos['quantity'] + $quantity);
+                // Update Position
+                $pos['quantity'] += $coverQty;
+                // If fully covered, reset avg_price
+                if ($pos['quantity'] == 0)
+                    $pos['avg_price'] = 0;
+
+                // Remaining Qty to go Long?
+                $remainingKey = $quantity - $coverQty;
+                if ($remainingKey > 0) {
+                    // Logic to flip long would go here, but let's keep it simple: 
+                    // One operation per order. Warning if mixed.
+                }
+
+            } else {
+                // Regular Long Buy
+                if ($this->state['balance'] < $totalCost) {
+                    return ['status' => 'failed', 'reason' => 'Insufficient funds'];
+                }
+                $this->state['balance'] -= $totalCost;
+
+                // Avg Price Calculation
+                if (($pos['quantity'] + $quantity) > 0) {
+                    $pos['avg_price'] = (($pos['quantity'] * $pos['avg_price']) + ($quantity * $price)) / ($pos['quantity'] + $quantity);
+                }
+                $pos['quantity'] += $quantity;
             }
-            $pos['quantity'] += $quantity;
 
         } elseif ($side === 'SELL') {
-            $currentPos = $this->state['positions'][$symbol] ?? ['quantity' => 0, 'avg_price' => 0];
-            if (is_numeric($currentPos))
-                $currentPos = ['quantity' => $currentPos, 'avg_price' => 0];
+            // SELLING LONG OR GOING SHORT
+            if ($pos['quantity'] > 0) {
+                // Closing Long
+                $sellQty = min($quantity, $pos['quantity']);
 
-            if ($currentPos['quantity'] < $quantity) {
-                return ['status' => 'failed', 'reason' => 'Insufficient shares to sell'];
-            }
+                $this->state['balance'] += ($sellQty * $price);
+                $pnl = ($price - $pos['avg_price']) * $sellQty;
 
-            $this->state['balance'] += $totalCost;
+                $pos['quantity'] -= $sellQty;
+                if ($pos['quantity'] == 0)
+                    $pos['avg_price'] = 0;
 
-            // Calculate PnL
-            $avgEntry = $currentPos['avg_price'];
-            $pnl = ($price - $avgEntry) * $quantity;
+            } else {
+                // Opening/Adding to Short
+                // Shorting credits cash? usually margin. 
+                // For safety/simplicity in paper trade: We DON'T credit cash, we just track the short.
+                // We require margin (balance) > 0.
 
-            $this->state['positions'][$symbol]['quantity'] -= $quantity;
+                $newShortQty = $quantity;
 
-            if ($this->state['positions'][$symbol]['quantity'] <= 0) {
-                unset($this->state['positions'][$symbol]);
+                // Weighted Avg for Short
+                // Current Qty is negative or zero.
+                $currentAbsQty = abs($pos['quantity']);
+                $pos['avg_price'] = (($currentAbsQty * $pos['avg_price']) + ($newShortQty * $price)) / ($currentAbsQty + $newShortQty);
+
+                $pos['quantity'] -= $newShortQty; // Becomes more negative
             }
         }
 
