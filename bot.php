@@ -9,8 +9,11 @@ use StocksAlgo\Execution\PaperTradingExecutor;
 use Dotenv\Dotenv;
 
 // Load .env (Safe load for Docker/Render compatibility)
-$dotenv = Dotenv::createImmutable(__DIR__);
-$dotenv->safeLoad();
+$dotenvPath = __DIR__ . '/.env';
+if (file_exists($dotenvPath)) {
+    $dotenv = Dotenv::createImmutable(__DIR__);
+    $dotenv->safeLoad();
+}
 
 // Configuration
 $symbol = $argv[1] ?? 'AAPL';

@@ -12,15 +12,18 @@ header("Content-Type: application/json");
 ini_set('display_errors', 0); // Prevent PHP warnings from breaking JSON
 
 // Load .env
-$dotenv = Dotenv::createImmutable(__DIR__ . '/../');
-$dotenv->load();
+$dotenvPath = __DIR__ . '/../.env';
+if (file_exists($dotenvPath)) {
+    $dotenv = Dotenv::createImmutable(__DIR__ . '/../');
+    $dotenv->safeLoad();
+}
 
 $symbol = $_GET['symbol'] ?? 'IBM';
 $timeframe = $_GET['timeframe'] ?? '5min';
 
 use StocksAlgo\Data\TwelveDataDataProvider;
 
-$apiKey = $_ENV['TWELVE_DATA_API_KEY'] ?? '';
+$apiKey = $_ENV['TWELVE_DATA_API_KEY'] ?? getenv('TWELVE_DATA_API_KEY');
 
 if (empty($apiKey)) {
     echo json_encode(['error' => 'API Key missing (TWELVE_DATA_API_KEY)']);

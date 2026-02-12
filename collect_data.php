@@ -6,10 +6,15 @@ use StocksAlgo\Data\TwelveDataDataProvider;
 use Dotenv\Dotenv;
 
 // Load .env
-$dotenv = Dotenv::createImmutable(__DIR__);
-$dotenv->load();
+$dotenvPath = __DIR__ . '/.env';
+if (file_exists($dotenvPath)) {
+    $dotenv = Dotenv::createImmutable(__DIR__);
+    $dotenv->safeLoad();
+}
 
-$apiKey = $_ENV['TWELVE_DATA_API_KEY'] ?? die("API Key missing.\n");
+$apiKey = $_ENV['TWELVE_DATA_API_KEY'] ?? getenv('TWELVE_DATA_API_KEY');
+if (!$apiKey)
+    die("API Key missing.\n");
 $symbol = $argv[1] ?? 'PLTR'; // Default to PLTR
 $timeframe = $argv[2] ?? '1h'; // Default to 1h for training (more stable patterns)
 
