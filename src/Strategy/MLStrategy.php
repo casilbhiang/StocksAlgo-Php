@@ -46,7 +46,8 @@ class MLStrategy implements Strategy
         file_put_contents($tempFile, $jsonInput);
 
         // 3. Call Python
-        $cmd = 'python "' . $this->pythonScriptPath . '" "' . $tempFile . '"';
+        $pythonCmd = (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') ? 'python' : 'python3';
+        $cmd = $pythonCmd . ' "' . $this->pythonScriptPath . '" "' . $tempFile . '"';
 
         // Execute
         $output = shell_exec($cmd);
