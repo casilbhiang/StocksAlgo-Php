@@ -111,19 +111,19 @@ class PaperTradingExecutor implements OrderExecutor
                 // We are Short, so this BUY is a "Cover"
                 $coverQty = min($quantity, abs($pos['quantity']));
 
-                // PnL on the Short portion: (Entry - Current) * Qty
-                // Entry was Higher, Current is Lower = Profit
+                // PnL on the Short portion: (Entry - Exit) * Qty
                 $pnl = ($pos['avg_price'] - $price) * $coverQty;
 
-                // Deduct cost from balance (Buying back shares)
-                // Note: In paper trading shorts often credit cash upfront. 
-                // Here we simplify: You need cash to cover.
+                // DEBIT COST TO BUY BACK
+                // Since we Credited Cash on Short Entry, we now Debit Cash on Cover.
+                // The difference remains as Profit/Loss.
+
                 if ($this->state['balance'] < ($coverQty * $price)) {
-                    return ['status' => 'failed', 'reason' => 'Insufficient funds to cover short'];
+                    // In a real margin account, you might be liquidated before this.
+                    // But for paper trading, let's allow it if close, or fail.
+                    // return ['status' => 'failed', 'reason' => 'Insufficient funds to cover'];
                 }
                 $this->state['balance'] -= ($coverQty * $price);
-                // Add Profit (or subtract Loss) realized
-                $this->state['balance'] += $pnl;
 
                 // Update Position
                 $pos['quantity'] += $coverQty;
@@ -134,8 +134,7 @@ class PaperTradingExecutor implements OrderExecutor
                 // Remaining Qty to go Long?
                 $remainingKey = $quantity - $coverQty;
                 if ($remainingKey > 0) {
-                    // Logic to flip long would go here, but let's keep it simple: 
-                    // One operation per order. Warning if mixed.
+                    // Not handled for simplicity
                 }
 
             } else {
@@ -167,14 +166,14 @@ class PaperTradingExecutor implements OrderExecutor
 
             } else {
                 // Opening/Adding to Short
-                // Shorting credits cash? usually margin. 
-                // For safety/simplicity in paper trade: We DON'T credit cash, we just track the short.
-                // We require margin (balance) > 0.
+                // CREDIT CASH PROCEEDS from the Short Sale
 
                 $newShortQty = $quantity;
 
+                // Add cash to balance (Liability is tracked in Position)
+                $this->state['balance'] += ($newShortQty * $price);
+
                 // Weighted Avg for Short
-                // Current Qty is negative or zero.
                 $currentAbsQty = abs($pos['quantity']);
                 $pos['avg_price'] = (($currentAbsQty * $pos['avg_price']) + ($newShortQty * $price)) / ($currentAbsQty + $newShortQty);
 

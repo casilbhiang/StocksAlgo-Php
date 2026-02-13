@@ -151,30 +151,29 @@ try {
 
             $portfolio['position'] = $quantity;
 
+            // Calculate Market Value & PnL for display
             if ($quantity != 0) {
+                // Market Value (Negative for Shorts)
+                $portfolio['market_value'] = $quantity * $currentPrice;
+
                 if ($quantity > 0) {
-                    // LONG: Market Value = Quantity * Current Price
-                    $currentValue = $quantity * $currentPrice;
-                    $portfolio['market_value'] = $currentValue;
-                    // Unrealized PnL = (Current - Entry) * Qty
                     $unrealizedPnl = ($currentPrice - ($rawPos['avg_price'] ?? $currentPrice)) * $quantity;
                 } else {
-                    // SHORT: Market Value is the liability
-                    $portfolio['market_value'] = $quantity * $currentPrice;
-                    // Unrealized PnL = (Entry - Current) * |Qty|
                     $avgPrice = is_array($rawPos) ? ($rawPos['avg_price'] ?? $currentPrice) : $currentPrice;
                     $unrealizedPnl = ($avgPrice - $currentPrice) * abs($quantity);
                 }
                 $portfolio['unrealized_pnl'] = $unrealizedPnl;
             } else {
-                $unrealizedPnl = 0;
+                $portfolio['unrealized_pnl'] = 0;
+                $portfolio['market_value'] = 0;
             }
 
-            // Equity = Cash Balance + Unrealized PnL
-            $portfolio['equity'] = $portfolio['balance'] + $unrealizedPnl;
+            // Equity = Balance + Market Value of Positions
+            // (Since Short Proceeds are now in Balance, deducting the Buyback Cost (MarketValue) gives Equity)
+            $portfolio['equity'] = $portfolio['balance'] + $portfolio['market_value'];
 
             // Calculate ROI %
-            $initialBalance = 10000.0; // Hardcoded start for now, or fetch from DB if we tracked deposits
+            $initialBalance = 10000.0;
             $totalPnl = $portfolio['equity'] - $initialBalance;
             $portfolio['roi_percent'] = ($totalPnl / $initialBalance) * 100;
         }
